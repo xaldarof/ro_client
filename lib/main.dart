@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:app_ro_client/data/socket_client/xt_socket_client.dart';
+import 'package:app_ro_client/domain/models/transfer.dart';
+import 'package:app_ro_client/presentation/dialogs/add_order_to_table_dialog_content.dart';
 import 'package:flutter/material.dart';
+import 'domain/models/order_item_request.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,21 +19,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a blue toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
@@ -39,15 +29,6 @@ class MyApp extends StatelessWidget {
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
 
   final String title;
 
@@ -64,30 +45,135 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  final TextEditingController _controller = TextEditingController();
+  final List<OrderTable> _tables = [];
+
+  final TextEditingController _tableNumberController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            TextField(
-              controller: _controller,
-            ),
+        leading: Row(
+          children: [
+            FloatingActionButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    return SizedBox(
+                      width: 200,
+                      height: 200,
+                      child: Material(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: _tableNumberController,
+                            ),
+                            FloatingActionButton(
+                              onPressed: () {
+                                _tables.add(
+                                  OrderTable(
+                                    tableNumber:
+                                        int.parse(_tableNumberController.text),
+                                    orders: [],
+                                  ),
+                                );
+                                setState(() {});
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+              child: const Icon(Icons.table_bar),
+            )
           ],
         ),
+        title: Text(widget.title),
+      ),
+      body: ListView.builder(
+        itemBuilder: (e, i) {
+          final orders = _tables[i];
+          return GestureDetector(
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                builder: (context) {
+                  return AddOrderToTableDialogContent(
+                    onSelect: (OrderItemRequest food) {
+                      final exist = _tables[i]
+                          .orders
+                          .where((element) => element.name == food.name)
+                          .isNotEmpty;
+                      if (exist) {
+                        final index = _tables[i]
+                            .orders
+                            .indexWhere((element) => element.name == food.name);
+                        _tables[i].orders[index].increaseCount();
+                      } else {
+                        _tables[i].orders.add(food);
+                      }
+                      setState(() {});
+                      notify();
+                    },
+                  );
+                },
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.greenAccent),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...orders.orders.map(
+                    (e) {
+                      return Row(
+                        children: [
+                          Text('${e.name}    x${e.count}'),
+                          const Padding(
+                            padding: EdgeInsets.all(24),
+                          ),
+                          FloatingActionButton(
+                            onPressed: () {
+                              e.decreaseCount();
+                              setState(() {});
+                              notify();
+                            },
+                            child: const Icon(Icons.remove),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.all(12),
+                          ),
+                          FloatingActionButton(
+                              onPressed: () {
+                                e.increaseCount();
+                                setState(() {});
+                                notify();
+                              },
+                              child: const Icon(Icons.add)),
+                          const Padding(
+                            padding: EdgeInsets.all(12),
+                          ),
+                          Text('${e.count * e.price}'),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        itemCount: _tables.length,
       ),
       floatingActionButton: Column(
         children: [
@@ -98,13 +184,32 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           FloatingActionButton(
             onPressed: () {
-              XTSocketClient.send('new_order', _controller.text);
+              notify();
             },
             tooltip: 'Increment',
-            child: const Icon(Icons.message),
+            child: const Icon(Icons.send),
           ),
         ],
       ),
     );
+  }
+
+  void notify() {
+    XTSocketClient.send(
+        "new_order", jsonEncode(TransferDTO(data: _tables).toJson()));
+  }
+}
+
+extension Iterables<E> on List<E> {
+  Map<K, List<E>> groupBy<K>(K Function(E) keyFunction) => fold(
+      <K, List<E>>{},
+      (Map<K, List<E>> map, E element) =>
+          map..putIfAbsent(keyFunction(element), () => <E>[]).add(element));
+}
+
+extension IndexedIterable<E> on Iterable<E> {
+  Iterable<T> mapIndexed<T>(T Function(E e, int i) f) {
+    var i = 0;
+    return map((e) => f(e, i++));
   }
 }

@@ -9,8 +9,7 @@ import 'package:app_ro_client/domain/models/order_item_request.dart';
 
 class XTSocketClient {
   static Socket? _socket;
-  static final StreamController<BaseDTO> _streamController =
-      StreamController();
+  static final StreamController<BaseDTO> _streamController = StreamController();
 
   static void on(String event, Function(String body) callback) {
     _streamController.stream.listen((currEvent) {
@@ -39,10 +38,6 @@ class XTSocketClient {
   }
 
   static Future<void> send(String event, String message) async {
-    _socket?.write(jsonEncode(BaseDTO(
-            event: event,
-            body: jsonEncode(
-                const OrderItemRequest(name: "Osh", price: 23000).toMap()))
-        .toMap()));
+    _socket?.write(jsonEncode(BaseDTO(event: event, body: message).toMap()));
   }
 }
